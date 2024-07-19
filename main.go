@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"net/http"
 	"sync"
+
+	"github.com/labstack/echo/v4"
 )
 
 // We are using generics, K is any type that is comparable so that we can perform equality and relational operations.
@@ -84,45 +86,127 @@ func (s *KVStore[K, V]) Delete(key K) (V, error) {
 	return value, nil
 }
 
+// type Server struct {
+// 	Store Storer[string, string]
+// }
+
+// func (s *Server) getUserByName(name string) (string, error) {
+// 	return s.Store.Get(name)
+// }
+
+// func main() {
+// 	s := Server{
+// 		Store: NewKVStore[string, string](),
+// 	}
+
+// 	if err := s.Store.Put("Fuck U", "BITCHH!!"); err != nil {
+// 		log.Fatal(err)
+// 	}
+
+// 	store := NewKVStore[string, string]()
+
+// 	if err := store.Put("Aryan", "Kobe"); err != nil {
+// 		log.Fatal(err)
+// 	}
+
+// 	value, err := store.Get("Aryan")
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+
+// 	if err := store.Update("Aryan", "MAMBA24"); err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	// Below we cannot use `:=`, it will throw error, as `:=` is used to declare and infere the type of a value
+// 	// and store it in the variable on the left hand side, where as `=` should be used once we have already declared
+// 	// a variable.
+// 	value, err = store.Get("Aryan")
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+
+// 	fmt.Println(value)
+
+// }
+
 type Server struct {
-	Store Storer[string, string]
+	Storage    Storer[string, string]
+	ListenAddr string
 }
 
-func (s *Server) getUserByName(name string) (string, error) {
-	return s.Store.Get(name)
+func NewServer(listenAddr string) *Server {
+	return &Server{
+		Storage:    NewKVStore[string, string](),
+		ListenAddr: listenAddr,
+	}
+}
+
+// // Basic HTTP server, without using any external frameworks listening on port 3000
+// func (s *Server) handlePut(w http.ResponseWriter, r *http.Request) {
+// 	w.WriteHeader(http.StatusOK)
+// 	w.Write([]byte("picabooo!"))
+// }
+
+// func (s *Server) Start() {
+// 	fmt.Printf("HTTP server is running on port %s", s.ListenAddr)
+
+// 	http.HandleFunc("/put", s.handlePut)
+
+// 	log.Fatal(http.ListenAndServe(s.ListenAddr, nil))
+// }
+
+// Using the echo web framework.
+func (s *Server) handlePut(c echo.Context) error {
+	key := c.Param("key")
+	value := c.Param("value")
+
+	s.Storage.Put(key, value)
+
+	return c.JSON(http.StatusOK, map[string]string{"msg": "ok"})
+}
+
+func (s *Server) handleGet(c echo.Context) error {
+	key := c.Param("key")
+
+	value, err := s.Storage.Get(key)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"value": value})
+}
+
+func (s *Server) handleUpdate(c echo.Context) error {
+	key := c.Param("key")
+	value := c.Param("value")
+
+	s.Storage.Update(key, value)
+
+	return c.JSON(http.StatusOK, map[string]string{"updated-value": value})
+}
+
+func (s *Server) handleDelete(c echo.Context) error {
+	key := c.Param("key")
+
+	s.Storage.Delete(key)
+
+	return c.JSON(http.StatusOK, map[string]string{"deleted-entry": key})
+}
+
+func (s *Server) Start() {
+	fmt.Printf("HTTP server is running on port %s", s.ListenAddr)
+
+	e := echo.New()
+
+	e.GET("/put/:key/:value", s.handlePut)
+	e.GET("/get/:key", s.handleGet)
+	e.GET("/update/:key/:value", s.handleUpdate)
+	e.GET("/delete/:key", s.handleDelete)
+
+	e.Start(s.ListenAddr)
 }
 
 func main() {
-	s := Server{
-		Store: NewKVStore[string, string](),
-	}
-
-	if err := s.Store.Put("Fuck U", "BITCHH!!"); err != nil {
-		log.Fatal(err)
-	}
-
-	store := NewKVStore[string, string]()
-
-	if err := store.Put("Aryan", "Kobe"); err != nil {
-		log.Fatal(err)
-	}
-
-	value, err := store.Get("Aryan")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if err := store.Update("Aryan", "MAMBA24"); err != nil {
-		log.Fatal(err)
-	}
-	// Below we cannot use `:=`, it will throw error, as `:=` is used to declare and infere the type of a value
-	// and store it in the variable on the left hand side, where as `=` should be used once we have already declared
-	// a variable.
-	value, err = store.Get("Aryan")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(value)
-
+	s := NewServer(":3000")
+	s.Start()
 }
